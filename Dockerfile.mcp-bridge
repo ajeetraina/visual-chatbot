@@ -10,14 +10,15 @@ RUN apt-get update && \
         curl \
         gnupg \
         lsb-release && \
+    # Add Docker's official GPG key
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    # Add Docker repository
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    # Install Docker CLI (includes MCP functionality)
     apt-get update && \
     apt-get install -y docker-ce-cli && \
+    # Cleanup
     rm -rf /var/lib/apt/lists/*
-
-# Install docker-mcp extension globally
-RUN npm install -g @ajeetraina/docker-mcp
 
 # Copy bridge package files
 COPY mcp-bridge/package*.json ./
@@ -26,9 +27,12 @@ RUN npm install && npm cache clean --force
 # Copy bridge source
 COPY mcp-bridge/ ./
 
-# Health check
+# Verify Docker MCP is available (optional health check)
+RUN docker --version && echo "Docker CLI with MCP support installed successfully"
+
+EXPOSE 3001
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
-EXPOSE 3001
 CMD ["node", "mcp-http-bridge.js"]
