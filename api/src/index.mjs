@@ -360,8 +360,11 @@ async function initializeMcpServers() {
   }
 }
 
-server.listen(3000, async () => {
-  console.log('Server running on port 3000');
+// Use PORT environment variable or default to 3003
+const PORT = process.env.PORT || 3003;
+
+server.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
   setupEventListeners();
   addSystemPrompt();
   await initializeMcpServers();
