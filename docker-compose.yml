@@ -29,18 +29,19 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3003:3003"
     depends_on:
       mcp-bridge:
         condition: service_healthy
     environment:
       - NODE_ENV=production
       - MCP_BRIDGE_URL=http://mcp-bridge:3001
+      - PORT=3003
     networks:
       - chatbot-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
