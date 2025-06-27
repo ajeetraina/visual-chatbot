@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # MCP HTTP Bridge - runs on host network with Docker access
