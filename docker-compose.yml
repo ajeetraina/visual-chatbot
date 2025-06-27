@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # MCP HTTP Bridge - runs on host network with Docker access
+  mcp-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-bridge
+    ports:
+      - "3001:3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - NODE_ENV=production
+    networks:
+      - chatbot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Visual Chatbot - connects to MCP bridge via network
+  visual-chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      mcp-bridge:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - MCP_BRIDGE_URL=http://mcp-bridge:3001
+    networks:
+      - chatbot-network
+    restart: unless-stopped
+
+networks:
+  chatbot-network:
+    driver: bridge
