@@ -1,0 +1,21 @@
+{
+  "name": "mcp-http-bridge",
+  "version": "1.0.0",
+  "description": "HTTP bridge for Docker MCP tools",
+  "main": "mcp-http-bridge.js",
+  "scripts": {
+    "start": "node mcp-http-bridge.js",
+    "dev": "nodemon mcp-http-bridge.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Ajeet Singh Raina",
+  "license": "MIT"
+}
