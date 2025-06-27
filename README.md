@@ -27,22 +27,22 @@ chmod +x test-mcp-bridge.sh
 docker-compose up -d
 
 # Access the application
-open http://localhost:3000
+open http://localhost:3003
 ```
 
 This will start:
-- **Visual Chatbot** on port 3000
+- **Visual Chatbot** on port 3003
 - **MCP HTTP Bridge** on port 3001 with Docker socket access
 
 ### Option 2: Simple Docker Run
 
 ```console
-docker run -dp 3000:3000 -v /var/run/docker.sock:/var/run/docker.sock mikesir87/visual-chatbot
+docker run -dp 3003:3003 -v /var/run/docker.sock:/var/run/docker.sock mikesir87/visual-chatbot
 ```
 
 **NOTE:** The Docker socket is mounted to allow the tool to launch containerized MCP servers
 
-Once the container has started, you can open the app at http://localhost:3000/.
+Once the container has started, you can open the app at http://localhost:3003/.
 
 ## Docker MCP Integration
 
@@ -63,7 +63,7 @@ The **MCP HTTP Bridge** solves the problem of accessing Docker MCP tools from wi
 ```
 ┌─────────────────┐    HTTP    ┌─────────────────┐    Docker    ┌─────────────┐
 │  Visual Chatbot │ ────────► │  MCP HTTP Bridge │ ──────────► │ Docker MCP  │
-│   (Container)   │            │   (Container)    │             │   Tools     │
+│   (Port 3003)   │            │   (Port 3001)    │             │   Tools     │
 └─────────────────┘            └─────────────────┘             └─────────────┘
 ```
 
@@ -90,6 +90,9 @@ Once connected, you'll see Docker MCP tools like:
 # Check if bridge is healthy
 curl http://localhost:3001/health
 
+# Check if chatbot is healthy
+curl http://localhost:3003/health
+
 # View bridge logs
 docker-compose logs mcp-bridge
 
@@ -105,6 +108,7 @@ docker mcp --help
 1. **Bridge not connecting**: Ensure Docker is running and MCP bridge container has socket access
 2. **No Docker tools**: Check if bridge is healthy and properly configured
 3. **Permission errors**: Verify Docker socket permissions (`chmod 666 /var/run/docker.sock`)
+4. **Port conflicts**: Make sure ports 3001 and 3003 are available
 
 ### LLM configuration
 
@@ -155,6 +159,23 @@ cd ../mcp-bridge && npm install
 # Build and start
 docker-compose up --build
 ```
+
+### Running on Different Ports
+
+The application is configured to run on **port 3003** by default. To change the port:
+
+1. **Via Environment Variable**:
+   ```bash
+   PORT=8080 docker-compose up
+   ```
+
+2. **Via docker-compose.yml**:
+   ```yaml
+   environment:
+     - PORT=8080
+   ports:
+     - "8080:8080"
+   ```
 
 ## Contributions
 
