@@ -1,76 +1,101 @@
-import EventEmitter from 'node:events';
-import { ToolStore } from './toolStore.mjs';
+// Enhanced mcpServerStore.mjs with HTTP MCP support
+import { McpServer } from "./mcpServer.mjs";
+import { HttpMcpServer } from "./httpMcpServer.mjs";
 
 export class McpServerStore {
-
-  /**
-   * Create a new store for MCP Servers
-   * @param {ToolStore} toolStore A tool store
-   */
-  constructor(toolStore) {
-    this.toolStore = toolStore;
-    this.mcpServers = [];
-    this.eventEmitter = new EventEmitter();
+  constructor() {
+    this.servers = {};
   }
 
-  /**
-   * Add a new MCP Server
-   * @param {McpServer} mcpServer The MCP Server to add
-   */
-  addMcpServer(mcpServer) {
-    this.mcpServers.push(mcpServer);
-
-    mcpServer.getTools().forEach(tool => {
-      this.toolStore.addTool(tool);
-    });
-
-    this.eventEmitter.emit('mcpServerAdded', mcpServer);
-  }
-
-  /**
-   * Remove an MCP Server
-   * @param {string} mcpServerName The name of the MCP Server to remove
-   */
-  async removeMcpServerByName(mcpServerName) {
-    const mcpServer = this.mcpServers.find(server => server.name === mcpServerName);
-    if (!mcpServer) {
-      return;
+  async addServer(name, config) {
+    try {
+      let server;
+      
+      if (config.type === 'http') {
+        // HTTP-based MCP server (like Docker MCP bridge)
+        server = new HttpMcpServer(name, config.baseUrl);
+      } else {
+        // Traditional stdio-based MCP server
+        server = new McpServer(name, config.command, config.args);
+      }
+      
+      await server.bootstrap();
+      this.servers[name] = server;
+      
+      console.log(`Added MCP server: ${name} (${config.type || 'stdio'})`);
+      return server;
+    } catch (error) {
+      console.error(`Failed to add MCP server ${name}:`, error);
+      throw error;
     }
+  }
 
-    await mcpServer.shutdown();
+  async addDockerMcpGateway(type = 'extension') {
+    const name = `docker-mcp-${type}`;
     
-    this.mcpServers = this.mcpServers.filter(server => server.name !== mcpServerName);
-
-    mcpServer.getTools().forEach(tool => {
-      this.toolStore.removeToolByName(tool.name);
-    });
-
-    this.eventEmitter.emit('mcpServerRemoved', mcpServer);
+    // Check if bridge is running on host
+    const bridgeUrl = type === 'extension' ? 
+      'http://host.docker.internal:3001' : 
+      'http://localhost:3001';
+    
+    try {
+      // Test connectivity
+      const response = await fetch(`${bridgeUrl}/health`, {
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Bridge not responding: ${response.status}`);
+      }
+      
+      await this.addServer(name, {
+        type: 'http',
+        baseUrl: bridgeUrl
+      });
+      
+      return this.servers[name];
+    } catch (error) {
+      console.error(`Failed to connect to Docker MCP bridge at ${bridgeUrl}:`, error);
+      throw new Error(`Docker MCP bridge not available. Please ensure:\n1. MCP bridge is running on port 3001\n2. Docker is accessible from the bridge\n\nError: ${error.message}`);
+    }
   }
 
-  /**
-   * Get all MCP Servers
-   * @returns {McpServer[]} The MCP Servers
-   */
-  getMcpServers() {
-    return this.mcpServers;
+  getServer(name) {
+    return this.servers[name];
   }
 
-  onMcpServerAdded(callback) {
-    this.eventEmitter.on('mcpServerAdded', callback);
+  getAllServers() {
+    return Object.values(this.servers);
   }
 
-  onMcpServerRemoved(callback) {
-    this.eventEmitter.on('mcpServerRemoved', callback);
+  getAllTools() {
+    return Object.values(this.servers).flatMap(server => server.getTools());
   }
 
-  getMcpServersJSON() {
-    return this.mcpServers.map(server => server.toJSON());
+  async removeServer(name) {
+    if (this.servers[name]) {
+      await this.servers[name].shutdown();
+      delete this.servers[name];
+      console.log(`Removed MCP server: ${name}`);
+    }
   }
 
   async shutdown() {
-    for (const mcpServer of this.mcpServers) {
-      await mcpServer.shutdown();
-    }
+    const shutdownPromises = Object.values(this.servers).map(server => 
+      server.shutdown().catch(error => 
+        console.error(`Error shutting down server:`, error)
+      )
+    );
+    
+    await Promise.all(shutdownPromises);
+    this.servers = {};
+  }
+
+  toJSON() {
+    return {
+      servers: Object.fromEntries(
+        Object.entries(this.servers).map(([name, server]) => [name, server.toJSON()])
+      )
+    };
   }
 }
