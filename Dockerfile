@@ -27,6 +27,6 @@ COPY --from=build-react-app /app/dist /usr/local/app/public
 COPY --from=sample-server /usr/local/app /usr/local/sample-mcp-server
 COPY --from=docker --link /usr/local/bin/docker /usr/local/bin/docker
 
-# Expose the port and start the server
-EXPOSE 3000
+# Expose port 3003 for the visual chatbot
+EXPOSE 3003
 CMD ["node", "src/index.mjs"]
