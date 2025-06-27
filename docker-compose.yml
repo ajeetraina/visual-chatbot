@@ -1,7 +1,7 @@
-
+version: '3.8'
 
 services:
-  # MCP HTTP Bridge - runs on host network with Docker access
+  # MCP HTTP Bridge - runs with Docker socket access
   mcp-bridge:
     build:
       context: .
@@ -9,6 +9,7 @@ services:
     ports:
       - "3001:3001"
     volumes:
+      # Mount Docker socket for MCP tools access
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
@@ -20,8 +21,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
-  # Visual Chatbot - connects to MCP bridge via network
+  # Visual Chatbot - connects to MCP bridge via HTTP
   visual-chatbot:
     build:
       context: .
@@ -37,7 +39,18 @@ services:
     networks:
       - chatbot-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   chatbot-network:
     driver: bridge
+    name: visual-chatbot-network
+
+# Optional: Add volumes for persistent data
+volumes:
+  mcp-data:
+    driver: local
