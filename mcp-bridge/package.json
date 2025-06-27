@@ -1,21 +1,26 @@
 {
   "name": "mcp-http-bridge",
   "version": "1.0.0",
-  "description": "HTTP bridge for Docker MCP tools",
+  "description": "HTTP bridge for Docker MCP tools integration",
   "main": "mcp-http-bridge.js",
   "scripts": {
     "start": "node mcp-http-bridge.js",
-    "dev": "nodemon mcp-http-bridge.js"
+    "dev": "node mcp-http-bridge.js",
+    "test": "docker --version && echo 'Docker CLI available'"
   },
   "dependencies": {
-    "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.0"
+    "express": "^4.19.2"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "author": "Ajeet Singh Raina",
+  "keywords": [
+    "mcp",
+    "docker",
+    "bridge",
+    "http",
+    "api"
+  ],
+  "author": "ajeetraina",
   "license": "MIT"
 }
