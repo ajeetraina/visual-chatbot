@@ -17,10 +17,9 @@ const io = new SocketIo(server);
 dotenv.config();
 
 const config = new Configuration();
-
 const messageStore = new MessageStore();
 const toolStore = new ToolStore();
-const mcpServerStore = new McpServerStore(toolStore);
+const mcpServerStore = new McpServerStore();
 const llmClient = new LlmClient(
   config, 
   messageStore, 
@@ -29,6 +28,15 @@ const llmClient = new LlmClient(
 
 app.use(express.json());
 app.use(express.static('public'));
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: 'Visual Chatbot Ready',
+    mcpServers: mcpServerStore.getAllServers().length,
+    tools: toolStore.getTools().length
+  });
+});
 
 app.get("/api", (req, res) => {
   res.json({ status: 'ok' });
@@ -73,33 +81,128 @@ app.delete("/api/messages", (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Enhanced MCP server endpoints
+app.get("/api/mcp-servers", (req, res) => {
+  res.json(mcpServerStore.toJSON());
+});
+
 app.post("/api/mcp-servers", async (req, res) => {
+  try {
+    const { name, config } = req.body;
+    
+    if (!name || !config) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and config are required'
+      });
+    }
+    
+    const server = await mcpServerStore.addServer(name, config);
+    
+    // Re-register tools
+    toolStore.clearTools();
+    const allTools = mcpServerStore.getAllTools();
+    allTools.forEach(tool => toolStore.addTool(tool));
+    
+    // Emit events
+    io.emit('mcpServerAdded', server.toJSON());
+    io.emit('tools', toolStore.getToolsJSON());
+    
+    res.json({
+      success: true,
+      server: server.toJSON(),
+      toolCount: server.getTools().length
+    });
+  } catch (error) {
+    console.error('Error adding MCP server:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Add Docker MCP Gateway endpoint
+app.post('/api/mcp-servers/docker-gateway', async (req, res) => {
+  try {
+    const { type = 'extension' } = req.body;
+    
+    const server = await mcpServerStore.addDockerMcpGateway(type);
+    
+    // Re-register tools
+    toolStore.clearTools();
+    const allTools = mcpServerStore.getAllTools();
+    allTools.forEach(tool => toolStore.addTool(tool));
+    
+    // Emit events
+    io.emit('mcpServerAdded', server.toJSON());
+    io.emit('tools', toolStore.getToolsJSON());
+    
+    res.json({
+      success: true,
+      server: server.toJSON(),
+      toolCount: server.getTools().length
+    });
+  } catch (error) {
+    console.error('Error adding Docker MCP gateway:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.delete("/api/mcp-servers/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    await mcpServerStore.removeServer(name);
+    
+    // Re-register remaining tools
+    toolStore.clearTools();
+    const allTools = mcpServerStore.getAllTools();
+    allTools.forEach(tool => toolStore.addTool(tool));
+    
+    // Emit events
+    io.emit('mcpServerRemoved', { name });
+    io.emit('tools', toolStore.getToolsJSON());
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing MCP server:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Legacy MCP server endpoint (for backwards compatibility)
+app.post("/api/mcp-servers-legacy", async (req, res) => {
   if (!req.body.name || !req.body.command || !req.body.args) {
     res.status(400).json({ status: 'error', message: 'Missing required fields' });
     return;
   }
 
   try {
-    const server = new McpServer(req.body.name, req.body.command, req.body.args);
-    await server.bootstrap();
-    mcpServerStore.addMcpServer(server);
+    const server = await mcpServerStore.addServer(req.body.name, {
+      command: req.body.command,
+      args: req.body.args
+    });
+    
+    // Re-register tools
+    toolStore.clearTools();
+    const allTools = mcpServerStore.getAllTools();
+    allTools.forEach(tool => toolStore.addTool(tool));
+    
+    io.emit('mcpServerAdded', server.toJSON());
+    io.emit('tools', toolStore.getToolsJSON());
+    
     res.json({ status: 'ok' });
   } catch (e) {
     res.status(500).json({ status: 'error', message: "Unable to start MCP server. Validate the startup command. " + e.message });
     return;
   }
 });
-
-app.delete("/api/mcp-servers", async (req, res) => {
-  if (!req.body.name) {
-    res.status(400).json({ status: 'error', message: 'Missing required fields' });
-    return;
-  }
-
-  await mcpServerStore.removeMcpServerByName(req.body.name);
-  res.json({ status: 'ok' });
-});
-
 
 app.post("/api/ai-tool-creation", async (req, res) => {
   const tool = new Tool(
@@ -117,7 +220,7 @@ app.post("/api/ai-tool-creation", async (req, res) => {
           description: "A description of the new tool to create",
         },
         code: { 
-          type: "string",
+         type: "string",
           description: "A JavaScript function body that will be executed when the tool is invoked. The code will be wrapped in an async function header that will provide the specified parameters as arguments. The code's return will be the output of the tool, so must provide a return.",
         },
         parameters: { 
@@ -135,11 +238,13 @@ app.post("/api/ai-tool-creation", async (req, res) => {
   );
 
   toolStore.addTool(tool);
+  io.emit('toolAdded', tool.toJSON());
   res.json({ status: 'ok' });
 });
 
 app.delete("/api/ai-tool-creation", (req, res) => {
   toolStore.removeToolByName("tool-creator");
+  io.emit('toolRemoved', { name: "tool-creator" });
   res.json({ status: 'ok' });
 });
 
@@ -161,6 +266,7 @@ app.delete("/api/tools", async (req, res) => {
   }
 
   toolStore.removeToolByName(req.body.name);
+  io.emit('toolRemoved', { name: req.body.name });
   res.json({ status: 'ok' });
 })
 
@@ -190,6 +296,7 @@ function addLocalTool(name, description, code, parameters) {
   );
 
   toolStore.addTool(tool);
+  io.emit('toolAdded', tool.toJSON());
 }
 
 function addSystemPrompt() {
@@ -205,21 +312,59 @@ function setupEventListeners() {
   messageStore.onMessagesCleared(() => addSystemPrompt());
   toolStore.onToolAdded(tool => io.emit('toolAdded', tool.toJSON()));
   toolStore.onRemovedTool(tool => io.emit('toolRemoved', tool.toJSON()));
-  mcpServerStore.onMcpServerAdded(server => io.emit('mcpServerAdded', server.toJSON()));
-  mcpServerStore.onMcpServerRemoved(server => io.emit('mcpServerRemoved', server.toJSON()));
   
   io.on('connection', (client) => {
     client.emit('config', config.toJSON());
     client.emit('messages', messageStore.getMessages());
     client.emit('tools', toolStore.getToolsJSON());
-    client.emit('mcpServers', mcpServerStore.getMcpServersJSON());
+    client.emit('mcpServers', mcpServerStore.toJSON());
   });
 }
 
-server.listen(3000, () => {
-  console.log('Server running on port 3000')
+// Initialize MCP servers
+async function initializeMcpServers() {
+  try {
+    // Add weather MCP server (traditional stdio)
+    await mcpServerStore.addServer('weather', {
+      command: 'node',
+      args: ['../sample-mcp-server/src/index.js']
+    });
+
+    // Add database MCP server (traditional stdio) 
+    await mcpServerStore.addServer('database', {
+      command: 'docker',
+      args: ['run', '--rm', '-i', 'mikesir87/mcp-sqlite-demo']
+    });
+
+    // Try to add Docker MCP gateway via HTTP bridge
+    try {
+      const bridgeUrl = process.env.MCP_BRIDGE_URL || 'http://mcp-bridge:3001';
+      await mcpServerStore.addServer('docker-mcp', {
+        type: 'http',
+        baseUrl: bridgeUrl
+      });
+      console.log('✅ Docker MCP bridge connected successfully');
+    } catch (error) {
+      console.warn('⚠️  Docker MCP bridge not available:', error.message);
+      console.log('   You can add it later via the UI when the bridge is running');
+    }
+
+    // Register all tools
+    toolStore.clearTools();
+    const allTools = mcpServerStore.getAllTools();
+    allTools.forEach(tool => toolStore.addTool(tool));
+    
+    console.log(`Initialized ${allTools.length} tools from ${mcpServerStore.getAllServers().length} MCP servers`);
+  } catch (error) {
+    console.error('Error initializing MCP servers:', error);
+  }
+}
+
+server.listen(3000, async () => {
+  console.log('Server running on port 3000');
   setupEventListeners();
   addSystemPrompt();
+  await initializeMcpServers();
 });
 
 ["SIGINT", "SIGTERM"].forEach(signal => {
