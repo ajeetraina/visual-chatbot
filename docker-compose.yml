@@ -4,8 +4,8 @@ services:
   # MCP HTTP Bridge - Connects to Docker MCP Toolkit
   mcp-bridge:
     build:
-      context: ./mcp-bridge
-      dockerfile: ../Dockerfile.mcp-bridge
+      context: .
+      dockerfile: Dockerfile.mcp-bridge
     ports:
       - "3001:3001"
     volumes:
