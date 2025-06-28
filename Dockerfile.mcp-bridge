@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy MCP bridge package files
 COPY mcp-bridge/package*.json ./
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Copy MCP bridge source
 COPY mcp-bridge/ .
