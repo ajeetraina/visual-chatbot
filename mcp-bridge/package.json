@@ -1,15 +1,22 @@
 {
   "name": "mcp-http-bridge",
   "version": "1.0.0",
-  "description": "HTTP bridge for Docker MCP tools integration",
+  "description": "HTTP bridge for Docker MCP Toolkit integration",
   "main": "mcp-http-bridge.js",
   "scripts": {
     "start": "node mcp-http-bridge.js",
-    "dev": "node mcp-http-bridge.js",
-    "test": "docker --version && echo 'Docker CLI available'"
+    "dev": "nodemon mcp-http-bridge.js",
+    "test": "curl -f http://localhost:3001/health"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "child_process": "^1.0.2",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -22,5 +29,5 @@
     "api"
   ],
   "author": "ajeetraina",
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

@@ -1,50 +1,55 @@
 version: '3.8'
 
 services:
-  # MCP HTTP Bridge - runs with Docker socket access
+  # MCP HTTP Bridge - Connects to Docker MCP Toolkit
   mcp-bridge:
     build:
-      context: .
-      dockerfile: Dockerfile.mcp-bridge
+      context: ./mcp-bridge
+      dockerfile: ../Dockerfile.mcp-bridge
     ports:
       - "3001:3001"
     volumes:
-      # Mount Docker socket for MCP tools access
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
-    networks:
-      - chatbot-network
-    restart: unless-stopped
+      - PORT=3001
+      - DOCKER_HOST=unix:///var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
+    networks:
+      - chatbot-network
+    restart: unless-stopped
 
-  # Visual Chatbot - connects to MCP bridge via HTTP
+  # Visual Chatbot Application
   visual-chatbot:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "3003:3003"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - MCP_BRIDGE_URL=http://mcp-bridge:3001
+      - DOCKER_HOST=unix:///var/run/docker.sock
     depends_on:
       mcp-bridge:
         condition: service_healthy
-    environment:
-      - NODE_ENV=production
-      - MCP_BRIDGE_URL=http://mcp-bridge:3001
-      - PORT=3003
-    networks:
-      - chatbot-network
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    networks:
+      - chatbot-network
+    restart: unless-stopped
 
 networks:
   chatbot-network:
